@@ -1,0 +1,117 @@
+---
+title: "625-HW3-Zejia"
+author: "Zejia Liu"
+date: "2022-11-22"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+```
+
+
+Linear Regression Model:
+
+
+1. Data set up:
+```{r}
+setwd("~/Desktop/Rstudio_work")
+library(sas7bdat) 
+library(dplyr)
+mydata <- read.sas7bdat("completedata.sas7bdat")
+head(mydata)
+
+```
+2. Model fitting:
+
+Setting varibles:
+```{r}
+X_matrix <- cbind(1, mydata$Fatalism, mydata$Age, mydata$R_E)
+
+Y_dep <- as.vector(mydata$Depression)
+
+```
+
+Setting models:
+```{r}
+fit_model <- function(aim_X, Y) {
+    beta_hat <- solve(t(aim_X) %*% aim_X) %*% t(aim_X) %*% Y
+    residuals <- Y - aim_X %*% beta_hat
+    df <- nrow(aim_X) - ncol(aim_X)
+    sigma_Sq <- (t(residuals) %*% residuals) / df
+    Variance_beta <- as.vector(sigma_Sq) * (solve(t(aim_X) %*% aim_X))
+    SE <- sqrt(diag(Variance_beta))
+
+    # 95% Confidence Interval
+    lower_bound <- beta_hat - 1.96 * SE
+    upper_bound <- beta_hat + 1.96 * SE
+
+    CI <- cbind(lower_bound, upper_bound)
+
+    # Organize results into a nice dataframe that can be used to view results
+    results_df <- data.frame(cbind(term = seq(length(beta_hat)),
+                                   estimate = beta_hat,
+                                   std_error = SE,
+                                   conf_low = lower_bound,
+                                   conf_high = upper_bound))
+
+    colnames(results_df) <- c("Term", "Estimate", "Std. Error",
+                              "95% CI Lower Bound", "95% CI Upper Bound")
+
+
+    # Store the variables
+    model_table <- list(parameters = as.vector(beta_hat),
+                         residuals = residuals,
+                         sigma_Sq = sigma_Sq, var_Mat = Variance_beta,
+                         param_StdErrors = SE,
+                         c_interval = CI,
+                         results = results_df)
+
+    return(model_table)
+
+}
+  
+    
+```
+
+
+```{r}
+OLS.fit <- fit_model(aim_X = X_matrix, Y = Y_dep)
+
+OLS.fit
+
+```
+
+3. Checking Correctness: 
+
+```{r}
+lm.fit <- lm(formula = "Depression ~ Fatalism + Age + R_E", data = mydata)
+all.equal(as.vector(lm.fit$coefficients), as.vector(OLS.fit$parameters))
+
+```
+
+```{r}
+stdErr.lm <- summary(lm.fit)$coefficients[,"Std. Error"]
+all.equal(as.vector(stdErr.lm), OLS.fit$param_StdErrors)
+```
+
+```{r}
+all.equal(as.vector(OLS.fit$residuals), as.vector(lm.fit$residuals))
+```
+Based on the results above, we know that our implemented R function has the same beta esimates, standard error as the lm() function. Hence, we can comfirm our model's correctness.
+
+4. Efficiency Analysis:
+
+```{r}
+library(microbenchmark)
+microbenchmark::microbenchmark(
+    lm(formula = "Depression ~ Fatalism + Age + R_E", data = mydata),
+    fit_model(aim_X = X_matrix, Y = Y_dep)
+)
+```
+We conclude that our optimized model runs faster than lm() function.
